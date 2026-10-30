@@ -1,0 +1,4 @@
+{"out_dir": "results", "tex_dir": "results",
+ "episodes": "export/episodes.csv", "indicators": "export/indicators.csv",
+ "sweep": "export/sweep.csv", "coldstart": "export/coldstart.csv", "forge_frames": "export/forge_frames.csv",
+ "songlin": {"radio": "none", "ethernet": "none"}}

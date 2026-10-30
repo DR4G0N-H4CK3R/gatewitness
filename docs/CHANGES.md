@@ -1,0 +1,13 @@
+# Changes after freezing `frozen_params.json`
+
+Fixes 1–4 were made before any attack result was inspected. Fixes 5–6 were found while diagnosing implausible first adaptive results (forgery near placebo, the 8-bit evidence at zero). Both are code bugs, not parameter changes, and every affected run was discarded and rerun from scratch with all parameters unchanged.
+
+| # | When | Change | Why | Effect on results |
+|---|---|---|---|---|
+| 1 | first main run | Markov-exact lattice capped at 40,000 cells; the cell width doubles when exceeded (also in `gw_stats.py`) | The search grew to millions of states and was killed for running out of memory | A coarser lattice rounds increments up further, so thresholds can only rise (more conservative) |
+| 2 | adaptive run, before results | `alarm_times(only={"LIVE[d]"})` never computed LIVE | Code bug | Without the fix, A9 (silencing) would have read 0 detection |
+| 3 | adaptive run, before results | Qualifier `VOL*` also matched `VOLR` (the chaff test); changed to `VOL[*` | Code bug: VOLR's benign alarms leaked into the leak and A3 placebo | The first main run was discarded (see #5); every run in `out/` uses the corrected qualifier |
+| 4 | before the sweep | IsolationForest threshold mapped to a benign-score quantile, `0.2·2^-θ` | With the original mapping it never alarmed at any θ, so its curve would have been one point | Baseline sweep only |
+| 5 | after the first adaptive run, while diagnosing EMIT | ACK lookup searched 2 ms after the frame *timestamp*; capture timestamps mark frame start, so the ACK of any frame longer than ~56 B (air time > 1.8 ms) was treated as missing. Window is now air time + 2 ms, as the frozen spec intended ("within 2 ms" of the frame). | Code bug: 56-93% of benign frames were flagged as emitter anomalies, swamping forgery evidence | All runs using EMIT (main, long, adaptive, cold start) discarded and rerun |
+| 6 | same diagnosis | Counter state (32-bit and 8-bit) now resets at each capture boundary of a concatenated session | Code bug: captures are not concatenated in recording order, so counters appeared to step backward at a boundary and every later frame was flagged | Same reruns as #5 |
+| 7 | artifact packaging, after all results | `gw_stats.py`: `emit_k_required` now reports the anomalies an EMIT test needs under Bernoulli-exact thresholds (the operating mode of the detection tables); the Markov-exact figure is reported separately as `emit_k_required_markov`. `a10_pred` is skipped when the reference episodes carry no coverage | Reporting only: the macro had mixed Markov-exact and Bernoulli-exact thresholds | No detection result changes; Bernoulli-exact needs 3–6 anomalies (paper), Markov-exact 3–19 |
