@@ -1479,52 +1479,73 @@ def cmd_figs(cfg, R: Results):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.lines import Line2D
     sweep, cold = _csv(cfg["sweep"]), _csv(cfg["coldstart"])
     if sweep is None:
         print("figs: sweep.csv missing, skipped"); return
     plt.rcParams.update({"font.size": 7, "font.family": "serif", "axes.linewidth": 0.6,
-                         "axes.spines.top": False, "axes.spines.right": False})
-    fig, axes = plt.subplots(1, 5, figsize=(7.16, 1.85), constrained_layout=True)
-    panels = [("hide", "(a) hide"), ("change", "(b) change"), ("forge", "(c) forge"),
+                         "axes.spines.top": False, "axes.spines.right": False,
+                         "xtick.major.size": 2.5, "ytick.major.size": 2.5})
+    # Detectors that reach >0.15 beyond placebo in some panel get colour, marker and dash;
+    # the rest (never above 0.13) are drawn as thin grey lines so they do not hide the others.
+    STYLE = {"GateWitness":     dict(color="#2a78d6", marker="o", ls="-",  lw=1.8, ms=3.2, z=5),
+             "Radio vs hub":    dict(color="#eb6834", marker="D", ls="-",  lw=1.1, ms=2.8, z=4),
+             "Fixed count":     dict(color="#13906a", marker="^", ls="--", lw=1.1, ms=3.0, z=4),
+             "IP rules":        dict(color="#6250d6", marker="s", ls="-.", lw=1.1, ms=2.6, z=4),
+             "IsolationForest": dict(color="#c2185b", marker="v", ls=":",  lw=1.1, ms=3.0, z=4)}
+    GREY = dict(color="#b4b2a9", marker=None, ls="-", lw=0.7, ms=0, z=2)
+    fig, axs = plt.subplots(2, 3, figsize=(7.16, 2.45), constrained_layout=True)
+    axes = axs.ravel()
+    panels = [("hide", "(a) hide 80%"), ("change", "(b) change +60 B"), ("forge", "(c) forge"),
               ("a5", "(d) rate-preserving hide")]
     dets = [d for d in DETECTOR_ORDER if d in set(sweep.detector)]
     one_alarm = 1.0 / float(sweep.exposure_days.median())   # rate of a single alarm
-    for ax, (att, title) in zip(axes[:4], panels):
-        for j, det in enumerate(dets):
+    for k, (ax, (att, title)) in enumerate(zip(axes[:4], panels)):
+        for det in dets[::-1]:
             g = sweep[(sweep.detector == det) & (sweep.attack == att)].copy()
             if g.empty:
                 continue
             g["rate"] = (g.benign_alarms / g.exposure_days).clip(lower=0.3)
             g = g.sort_values("rate")
-            ax.plot(g.rate, g.det - g.placebo, color=PALETTE[j % 8], marker=MARKERS[j % 8],
-                    ms=3, lw=2 if det == "GateWitness" else 1, label=det,
-                    zorder=3 if det == "GateWitness" else 2)
-        ax.set_xscale("log"); ax.set_xlim(0.3, 3000); ax.set_ylim(-0.1, 1.0)
+            st = STYLE.get(det, GREY)
+            ax.plot(g.rate, g.det - g.placebo, color=st["color"], ls=st["ls"], lw=st["lw"],
+                    marker=st["marker"], ms=st["ms"], mec="white", mew=0.4, zorder=st["z"])
+        ax.set_xscale("log"); ax.set_xlim(0.3, 3000); ax.set_ylim(-0.25, 1.05)
         ax.set_xticks([1, 10, 100, 1000]); ax.set_xticklabels(["1", "10", "100", "1k"])
-        ax.minorticks_off()
-        ax.axvline(one_alarm, color="#888780", lw=0.6, ls=":")
-        ax.axhline(0, color="#888780", lw=0.5)
-        ax.grid(axis="y", color="#e6e5e0", lw=0.5)
-        ax.set_title(title, fontsize=7, loc="left")
+        ax.set_yticks([0, 0.5, 1.0]); ax.minorticks_off()
+        ax.axvline(one_alarm, color="#888780", lw=0.6, ls=":", zorder=1)
+        ax.axhline(0, color="#888780", lw=0.5, zorder=1)
+        ax.grid(axis="y", color="#e6e5e0", lw=0.5, zorder=0)
+        ax.set_title(title, fontsize=7.5, loc="left")
         ax.set_xlabel("benign alarms/day")
-    axes[0].set_ylabel("detection beyond placebo")
-    h, l = axes[0].get_legend_handles_labels()
-    fig.legend(h, l, loc="outside lower center", ncol=8, frameon=False, fontsize=6)
+        if k in (0, 3):
+            ax.set_ylabel("detection\nbeyond placebo", linespacing=1.0)
     ax = axes[4]
     if cold is not None:
-        for j, (prior, g) in enumerate(cold.groupby("prior")):
+        for prior, g in cold.groupby("prior"):
             g = g.groupby("minutes").detection.mean()
-            # neutral inks: this panel is not a detector comparison
             ax.plot(g.index, g.values, color="#2c2c2a" if prior else "#888780",
-                    ls="-" if prior else "--", marker="o" if prior else "s", ms=3, lw=1.5,
+                    ls="-" if prior else "--", marker="o" if prior else "s", ms=3, lw=1.3,
                     label="with prior" if prior else "no prior")
         ax.legend(frameon=False, fontsize=6, loc="lower right")
-    ax.set_title("(e) cold start", fontsize=7, loc="left")
+    ax.set_title("(e) cold start", fontsize=7.5, loc="left")
     ax.set_xlabel("commissioning (min)"); ax.set_ylabel("detection")
     ax.grid(axis="y", color="#e6e5e0", lw=0.5)
+    lg = axes[5]; lg.axis("off")
+    handles = [Line2D([], [], color=STYLE[d]["color"], ls=STYLE[d]["ls"], lw=STYLE[d]["lw"],
+                      marker=STYLE[d]["marker"], ms=STYLE[d]["ms"] + 0.6, mec="white", mew=0.4)
+               for d in STYLE if d in dets]
+    labels = [("Radio-to-hub" if d == "Radio vs hub" else d) for d in STYLE if d in dets]
+    others = [d for d in dets if d not in STYLE]
+    if others:
+        handles.append(Line2D([], [], **{k: v for k, v in GREY.items() if k in ("color", "ls", "lw")}))
+        labels.append("other baselines (\u2264 0.13):\n" + ", ".join(
+            "radio-only" if o == "Radio only" else o for o in others))
+    lg.legend(handles, labels, loc="center left", frameon=False, fontsize=6.5,
+              handlelength=2.6, labelspacing=0.7, borderaxespad=0)
     out = Path(cfg["tex_dir"]) / "figs"
     out.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out / "fig5_matched_coldstart.pdf")
+    fig.savefig(out / "fig5_matched_coldstart.pdf", metadata={"CreationDate": None})
     fig.savefig(Path(cfg["out_dir"]) / "fig5_matched_coldstart.png", dpi=200)
     # matched-rate margins quoted in Section VIII-G
     for att, key in (("change", "mr100_change"), ("forge", "mr100_forge"),

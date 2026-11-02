@@ -53,7 +53,7 @@ the theory predicted would be missed, 35 of 39 were missed.
 | A9 silencing (with LIVE) | 60/60 |
 | A10 low-coverage hiding, long horizon | 10/60 |
 
-## Matched alarm rates and cold start (`out/sweep.csv`, `out/coldstart.csv` → `results/summary.json["matched"]`, `["coldstart"]`, Fig. 5)
+## Matched alarm rates and cold start (`out/sweep.csv`, `out/coldstart.csv` → `results/summary.json["matched"]`, `["coldstart"]`, Fig. 2)
 
 - GateWitness has no operating point below 156 benign alarms/day.
 - At ≤ 100/day the radio-to-hub comparator detects 0.33 of hiding beyond placebo.

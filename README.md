@@ -28,31 +28,53 @@ python3 gw_stats.py selftest --config configs/fill.json   # statistics self-test
 
 # get ZIOTP2025 (only Data/Web_Interaction and Data/Extra/IP-Traffic are read)
 git clone https://github.com/antonio-boiano/ZIOTP2025 data
-GW_DATA=data ./run_all.sh                             # ≈ 20 min on one core
+GW_DATA=data ./run_all.sh                             # 10–15 min on one core
+```
+
+On Windows (PowerShell) use `python` and the Python runner instead:
+
+```powershell
+$env:GW_DATA = "C:\path\to\ZIOTP2025"
+python run_all.py
 ```
 
 `GW_DATA` must point to the folder that **contains** the dataset's `Data/`
 directory. It defaults to `./data`.
 
+## Live demo and paper check
+
+```bash
+python demo.py                 # ≈ 30 s: load, commissioning test, learn tests, benign run, live attacks
+python demo.py --all           # replay all 80 Table II episodes of one fold and compare with out/
+python demo.py --fold B2 --attack forge --device 1 --seed 3     # replay any single episode
+python check_paper.py          # every number in Tables II–IV and Sec. V vs. the result files
+python dashboard.py            # browser dashboard at http://127.0.0.1:8050: replay any episode on a
+                               # timeline (uplinks, reports, attack window, statistic vs. threshold,
+                               # alarm) and the paper-vs-code table
+```
+
+`docs/DEMO.md` is a step-by-step script for showing this to someone.
+
 ## What `run_all.sh` does
 
 | Step | Script | Writes | Paper |
 |---|---|---|---|
-| Parse the 12 paired radio + IP captures (2 homes) | `gw_load.py` | `cache/pairs.pkl` | §VI |
-| Commissioning permutation test; per-device ε, 1−γ, s by self-injection | `channel.py` | `results/channel.json` | §III–IV |
-| Seven attack classes on held-out folds, with placebo | `run_main.py main` | `out/episodes_main.csv`, `out/indicators.csv`, `out/benign_main.csv` | Table III |
-| Long-horizon suppression | `run_main.py long` | `out/episodes_long.csv`, `out/benign_long.csv` | §VII |
-| Adaptive attacks A1–A10, counters, cold start | `run_adaptive.py {adaptive,long,counters,coldstart}` | `out/episodes_adaptive*.csv`, `out/counters.json`, `out/forge_frames.csv`, `out/coldstart.csv` | Table V, Fig. 5e |
-| Threshold sweeps of GateWitness and seven baselines | `run_sweep.py` | `out/sweep.csv`, `out/sweep_episodes.csv` | Fig. 5a–d |
-| Tables, intervals and derived text numbers | `summarize.py`, `derive.py` | `results/summary.json`, `results/derived.json` | §VII |
-| Exact intervals, calibration table, Fig. 5 | `export_csvs.py`, `gw_stats.py all` | `results/gw_results.{json,tex}`, `results/figs/fig5_matched_coldstart.pdf` | Tables III–V, Fig. 5 |
+| Parse the 12 paired radio + IP captures (2 homes) | `gw_load.py` | `cache/pairs.pkl` | §IV |
+| Commissioning permutation test; per-device ε, 1−γ, s by self-injection | `channel.py` | `results/channel.json` | §III-B, §V |
+| Seven attack classes on held-out folds, with placebo | `run_main.py main` | `out/episodes_main.csv`, `out/indicators.csv`, `out/benign_main.csv` | Tables II, III |
+| Long-horizon suppression | `run_main.py long` | `out/episodes_long.csv`, `out/benign_long.csv` | Tables II, III |
+| Adaptive attacks A1–A10, counters, cold start | `run_adaptive.py {adaptive,long,counters,coldstart}` | `out/episodes_adaptive*.csv`, `out/counters.json`, `out/forge_frames.csv`, `out/coldstart.csv` | Table IV, Fig. 2e |
+| Threshold sweeps of GateWitness and seven baselines | `run_sweep.py` | `out/sweep.csv`, `out/sweep_episodes.csv` | Fig. 2a–d |
+| Tables, intervals and derived text numbers | `summarize.py`, `derive.py` | `results/summary.json`, `results/derived.json` | §V |
+| Exact intervals, calibration table, Fig. 2 | `export_csvs.py`, `gw_stats.py all` | `results/gw_results.{json,tex}`, `results/figs/fig5_matched_coldstart.pdf` | Tables II–IV, Fig. 2 |
+| Compare with the paper | `check_paper.py` | (prints) | all tables |
 
 `docs/RESULTS.md` maps each number quoted in the paper to the file and field
 it comes from.
 
 A clean run reproduces `out/` and `results/` byte for byte, with one exception.
 `derived.json["log_us_per_decision"]` is a wall-clock timing and depends on the
-machine. Fig. 5 is pixel-identical.
+machine. Fig. 2 is pixel-identical.
 
 ## Repository layout
 
@@ -64,11 +86,14 @@ gw_core.py           sessions, eligible uplinks, report matching, channel statis
 gw_eval.py           tests (SUP, SIZE, FAB, EMIT, VOL, NEWEP, LIVE, VOLR, COVERAGE),
                      budget-derived CUSUM calibration, and all attack injectors (inj_*)
 gw_stats.py          Clopper–Pearson / Garwood intervals, Brook–Evans and Markov-exact
-                     calibration, Fig. 5; `selftest` checks it on synthetic data
+                     calibration, Fig. 2; `selftest` checks it on synthetic data
 baselines.py         IsolationForest, IP rules, PingPong-style lengths, fixed count test,
                      radio-only, radio-to-hub, HAWatcher-style log monitor
 folds.py             leave-two-captures-out folds per home
-run_*.py             experiment drivers
+run_*.py             experiment drivers (run_all.sh / run_all.py run everything)
+demo.py              live walk-through; replays any Table II episode
+check_paper.py       compares every reported number with the result files
+dashboard.py, web/   replay dashboard (standard library server + one HTML page, works offline)
 gwio/                pcap/pcapng readers and the ZIOTP2025 adapter
 out/, results/       outputs of our run (committed)
 docs/CHANGES.md      every code change made after the parameters were frozen

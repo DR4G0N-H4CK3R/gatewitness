@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GateWitness Replay</title>
+<style>
+:root{
+  --bg:#f7f7f5; --panel:#ffffff; --ink:#1f2328; --ink2:#55595f; --muted:#8a8e94; --rule:#e3e3df; --grid:#eeeeea;
+  --blue:#2a78d6; --orange:#eb6834; --magenta:#c2185b; --green:#1e7a4c; --grey:#9a9a94;
+  --win:rgba(235,104,52,.10); --tail:rgba(235,104,52,.04); --thr:#2c2c2a;
+  --okbg:#e5f3ea; --okfg:#17603b; --badbg:#fbe9ee; --badfg:#a3123f; --neutbg:#eef1f6;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#16181b; --panel:#1f2226; --ink:#e8e9ea; --ink2:#b4b7bb; --muted:#8b8f95; --rule:#33373c; --grid:#2a2d31;
+    --blue:#5d9cec; --orange:#f08a5d; --magenta:#e0609a; --green:#4fbf85; --grey:#7c7f84;
+    --win:rgba(240,138,93,.16); --tail:rgba(240,138,93,.06); --thr:#d9dadc;
+    --okbg:#173a28; --okfg:#8fe0b4; --badbg:#3d1a26; --badfg:#ff9fc0; --neutbg:#262a30; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+header{padding:18px 24px 6px}
+h1{font-size:20px;margin:0 0 2px}
+.sub{color:var(--ink2);margin:0}
+nav{display:flex;gap:6px;padding:10px 24px 0}
+nav button{border:1px solid var(--rule);background:var(--panel);color:var(--ink);padding:7px 14px;border-radius:8px 8px 0 0;cursor:pointer;font:inherit}
+nav button.on{border-bottom-color:var(--panel);font-weight:600}
+main{padding:0 24px 32px}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:0 10px 10px 10px;padding:16px 18px}
+.controls{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:flex-end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--ink2);gap:3px}
+select,button.act{font:inherit;padding:6px 9px;border:1px solid var(--rule);border-radius:7px;background:var(--panel);color:var(--ink)}
+button.act{cursor:pointer}
+button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.foldinfo{color:var(--ink2);font-size:13px;margin:10px 0 2px}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:14px 0 6px}
+.tile{border:1px solid var(--rule);border-radius:9px;padding:10px 12px;background:var(--neutbg)}
+.tile .k{font-size:12px;color:var(--ink2)}
+.tile .v{font-size:20px;font-weight:650;margin-top:2px}
+.tile .s{font-size:12px;color:var(--ink2)}
+.tile.ok{background:var(--okbg)} .tile.ok .v{color:var(--okfg)}
+.tile.bad{background:var(--badbg)} .tile.bad .v{color:var(--badfg)}
+.explain{margin:8px 0 4px;color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.chip{border:1px solid var(--rule);border-radius:999px;padding:3px 10px;font-size:12px;cursor:pointer;background:var(--panel);color:var(--ink)}
+.chip.on{border-color:var(--blue);color:var(--blue);font-weight:600}
+#chart{width:100%;margin-top:6px;position:relative}
+#chart svg{display:block;width:100%}
+.legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--ink2);margin:6px 0 0}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{display:inline-block;width:14px;height:10px;border-radius:2px}
+#readout{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--rule);border-radius:7px;padding:6px 8px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.12);display:none;white-space:nowrap}
+.note{font-size:12px;color:var(--muted);margin-top:8px}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-weight:600;color:var(--ink2);font-size:12px}
+td.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+.pill{display:inline-block;padding:1px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.pill.ok{background:var(--okbg);color:var(--okfg)} .pill.bad{background:var(--badbg);color:var(--badfg)}
+.big{font-size:28px;font-weight:700}
+.allgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:10px}
+.allgrid div{font-size:12px;border:1px solid var(--rule);border-radius:7px;padding:5px 8px}
+.err{color:var(--badfg);font-weight:600}
+.hidden{display:none}
+@media (max-width:760px){ .tiles{grid-template-columns:repeat(2,minmax(0,1fr))} header,nav,main{padding-left:16px;padding-right:16px} }
+</style>
+</head>
+<body>
+<header>
+  <h1>GateWitness replay dashboard</h1>
+  <p class="sub">Every result here is recomputed live by the code that produced the paper. Nothing is precomputed.</p>
+</header>
+<nav>
+  <button id="tab1" class="on" onclick="tab(1)">Replay an episode</button>
+  <button id="tab2" onclick="tab(2)">Paper vs code</button>
+</nav>
+<main>
+<section id="p1" class="panel">
+  <div class="controls">
+    <label>Fold (home + fold)<select id="fold"></select></label>
+    <label>Attack<select id="attack"></select></label>
+    <label>Device<select id="device"></select></label>
+    <label>Seed<select id="seed"><option>0</option><option>1</option><option>2</option><option>3</option><option>4</option></select></label>
+    <button id="go" class="act primary" onclick="run()">Replay</button>
+    <button class="act" onclick="randomEp()">Random episode</button>
+    <button class="act" onclick="runAll()">Replay all 80 in this fold</button>
+  </div>
+  <div id="foldinfo" class="foldinfo"></div>
+  <div id="status" class="note"></div>
+  <div id="tiles" class="tiles"></div>
+  <div id="explain" class="explain"></div>
+  <div id="chips" class="chips"></div>
+  <div id="chart"><div id="readout"></div></div>
+  <div class="legend" id="legend"></div>
+  <div class="note">x axis: seconds from the start of the attack. Shaded: the attack window. Lighter shading: the 60 s after it, during which an alarm still counts.
+  The grey dashed line is the same test on the clean (unattacked) traffic. If it crosses the threshold inside the window, the episode is also a placebo hit.</div>
+  <div id="all" class="hidden"></div>
+</section>
+<section id="p2" class="panel hidden">
+  <div id="checksum"></div>
+  <div class="note">Each row prints the value exactly as written in the paper, then recomputes it from <code>results/summary.json</code>,
+  <code>results/channel.json</code> and <code>results/derived.json</code> with the same rounding. The rows are the same ones <code>check_paper.py</code> prints.</div>
+  <div style="overflow-x:auto;margin-top:10px"><table id="checktab"></table></div>
+</section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let META = null, FOLD = null, EP = null, TR = 0;
+
+function tab(n){ for (const i of [1,2]){ $('p'+i).classList.toggle('hidden', i!==n); $('tab'+i).classList.toggle('on', i===n); }
+  if (n===2 && !$('checktab').innerHTML) loadCheck(); }
+async function api(path){ const r = await fetch(path); const j = await r.json(); if (!r.ok) throw new Error(j.error||r.status); return j; }
+const fmt = (v,d=1) => v==null ? '–' : Number(v).toFixed(d);
+const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+async function init(){
+  META = await api('/api/meta');
+  $('fold').innerHTML = META.folds.map(f=>`<option>${f}</option>`).join('');
+  $('attack').innerHTML = Object.entries(META.attacks).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join('');
+  $('attack').value = 'forge';
+  $('fold').onchange = async ()=>{ await loadFold(); run(); };
+  await loadFold(); await run();
+}
+async function loadFold(){
+  $('status').textContent = 'commissioning fold ' + $('fold').value + ' …';
+  FOLD = await api('/api/fold?fold=' + $('fold').value);
+  $('device').innerHTML = FOLD.devices.map(d=>`<option value="${d.index}">${d.addr} · ${esc(d.label)}</option>`).join('');
+  const k = Object.entries(FOLD.kinds).map(([a,b])=>`${b} ${a}`).join(', ');
+  const band = FOLD.ack_band ? ` · ACK-turnaround band ${fmt(FOLD.ack_band.centre)} ± ${fmt(FOLD.ack_band.half,0)} µs` : '';
+  $('foldinfo').innerHTML = `Commissioned on ${FOLD.commission.join(', ')} · <b>${FOLD.tests} tests</b> (${k})${band} ·
+    held out ${FOLD.held.join(', ')} (${fmt(FOLD.held_minutes)} min): <b>${FOLD.benign} benign alarm${FOLD.benign===1?'':'s'}</b> on clean traffic at B = 1/day`;
+  $('status').textContent = '';
+}
+function randomEp(){
+  $('attack').selectedIndex = Math.floor(Math.random()*$('attack').options.length);
+  $('device').selectedIndex = Math.floor(Math.random()*2);
+  $('seed').selectedIndex = Math.floor(Math.random()*5);
+  run();
+}
+async function run(){
+  $('all').classList.add('hidden');
+  $('status').textContent = 'replaying …';
+  try{
+    EP = await api(`/api/episode?fold=${$('fold').value}&attack=${$('attack').value}&device=${$('device').value}&seed=${$('seed').value}`);
+    TR = 0; $('status').textContent = ''; render();
+  }catch(e){ $('status').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+}
+async function runAll(){
+  $('status').textContent = 'replaying all 80 episodes of fold ' + $('fold').value + ' …';
+  const r = await api('/api/fold_all?fold=' + $('fold').value);
+  $('status').textContent = '';
+  const box = $('all'); box.classList.remove('hidden');
+  box.innerHTML = `<div style="margin-top:14px"><span class="big">${r.agree}/${r.n}</span> live episodes identical to the committed rows of
+    <code>out/episodes_main.csv</code>, the file Table II is counted from.</div><div class="allgrid">` +
+    r.rows.map(x=>`<div><span class="pill ${x.match?'ok':'bad'}">${x.match?'match':'DIFF'}</span> ${x.attack} · ${x.device} · s${x.seed}<br>
+    ${x.detected?('detected '+fmt(x.latency)+' s'):'missed'}</div>`).join('') + '</div>';
+  box.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function tiles(){
+  const e = EP, c = e.committed;
+  const t = [];
+  t.push({k:'Verdict (live)', v: e.detected?'DETECTED':'MISSED', s: e.detected?`after ${fmt(e.latency)} s`:'no qualifying alarm in the window', cls: e.detected?'ok':'bad'});
+  t.push({k:'Placebo (clean traffic)', v: e.placebo?'alarm':'no alarm', s: e.placebo?'the test also fired without the attack':'the test stayed quiet without the attack', cls:''});
+  t.push({k:'Committed row (Table II data)', v: c?(c.detected?'detected':'missed'):'–', s: c?(c.detected?`after ${fmt(c.latency)} s`:'') + (c.placebo?' · placebo':''):'no row', cls:''});
+  t.push({k:'Live = committed?', v: e.match?'identical':'DIFFERENT', s: `fold ${e.fold} · device ${e.device} · seed ${e.seed}`, cls: e.match?'ok':'bad'});
+  $('tiles').innerHTML = t.map(x=>`<div class="tile ${x.cls}"><div class="k">${x.k}</div><div class="v">${x.v}</div><div class="s">${x.s}</div></div>`).join('');
+}
+function explain(){
+  const e = EP, tr = e.traces[TR], n = s => e.reports.filter(r=>r.status===s).length;
+  const what = {hide:`hid ${n('removed')} of the device's reports`, delay:`delayed ${n('delayed')} reports by 30 s`,
+    change:`added 60 bytes to ${n('altered')} reports`, swap:`swapped the contents of ${n('altered')} reports between two devices`,
+    invent:`invented ${n('invented')} reports with no radio event behind them`, leak:`sent ${e.egress.filter(x=>x.injected).length} records to a host never seen before`,
+    forge:`forged ${e.forged.length} radio frames under the device's address, ACKed by the hub's software`,
+    forgeX:`forged ${e.forged.length} radio frames with a hardware-exact ACK and a continuing frame counter`}[e.attack];
+  let s = `<b>${esc(e.attack_name)}</b> on <b>${e.device}</b> (${esc(e.device_label)}) in ${esc(e.segment)}, for ${fmt(e.t1-e.t0,0)} s.
+    The attacker ${what}; the device sent ${e.n_uplinks_in_window} uplinks in the window. `;
+  if (!tr) s += `The qualifying test (${e.missing.join(', ')}) was not admitted in this fold's commissioning, so the attack cannot be detected here.`;
+  else if (tr.attacked.kind==='cusum') s += `The ${tr.name} <code>${tr.tid}</code> adds evidence for every unit and resets at zero. It alarms when it reaches its threshold h = ${fmt(tr.attacked.h,2)}, which is derived from the declared budget of 1 benign alarm per day and never tuned. ` +
+       (tr.first_alarm!=null ? `It crossed h ${fmt(tr.first_alarm-e.t0)} s after the attack began.` : `It did not reach h before the scoring window closed.`) +
+       (tr.first_alarm!=null && tr.attacked.alarms.filter(a=>a>tr.first_alarm).length ? ` After an alarm the statistic restarts at 0, so a persisting attack keeps firing (grey dots); only the first alarm decides the episode.` : '');
+  else s += `The ${tr.name} alarms when a never-seen host receives more records in 60 s than the most any new host received during commissioning (${fmt(tr.attacked.h-0.5,0)}). ` +
+       (tr.first_alarm!=null ? `It fired ${fmt(tr.first_alarm-e.t0)} s after the attack began.` : `It did not fire in the window.`);
+  $('explain').innerHTML = s;
+  $('chips').innerHTML = e.traces.length>1 ? e.traces.map((t,i)=>`<span class="chip ${i===TR?'on':''}" onclick="TR=${i};render()">${t.tid}${t.first_alarm!=null?' · alarm':''}</span>`).join('') : '';
+}
+function render(){ tiles(); explain(); draw(); }
+
+// ───────────────────────── chart
+function draw(){
+  const e = EP, tr = e.traces[TR];
+  const host = $('chart'); const W = Math.max(host.clientWidth, 320);
+  const isLeak = e.attack==='leak';
+  const L = {left:150, right:18, top:10};
+  const lanes = [{key:'radio', label:'Radio: device uplinks', h:34}, {key:'rep', label:'Hub reports', h:34}];
+  if (isLeak) lanes.push({key:'eg', label:'Hub egress', h:30});
+  const laneH = lanes.reduce((a,b)=>a+b.h,0), gap = 16, cH = 210, axisH = 34;
+  const H = L.top + laneH + gap + cH + axisH;
+  const x0 = e.lo - e.t0, x1 = e.hi - e.t0, pw = W - L.left - L.right;
+  const X = t => L.left + ((t - e.t0) - x0) / (x1 - x0) * pw;
+  const C = {blue:css('--blue'), orange:css('--orange'), mag:css('--magenta'), grey:css('--grey'), ink2:css('--ink2'), muted:css('--muted'),
+             rule:css('--rule'), grid:css('--grid'), win:css('--win'), tail:css('--tail'), thr:css('--thr'), panel:css('--panel'), ink:css('--ink')};
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Episode timeline and test statistic">`;
+  const top = L.top, cTop = L.top + laneH + gap, cBot = cTop + cH;
+  // attack window and tail
+  s += `<rect x="${X(e.t0)}" y="${top}" width="${X(e.t1)-X(e.t0)}" height="${cBot-top}" fill="${C.win}"/>`;
+  s += `<rect x="${X(e.t1)}" y="${top}" width="${Math.max(0,Math.min(X(e.t1+e.tail),L.left+pw)-X(e.t1))}" height="${cBot-top}" fill="${C.tail}"/>`;
+  s += `<text x="${X(e.t0)+5}" y="${cTop+12}" font-size="11" fill="${C.ink2}">attack window →</text>`;
+  for (const [g0,g1] of (e.gaps||[])) s += `<rect x="${X(g0)}" y="${top}" width="${X(g1)-X(g0)}" height="${cBot-top}" fill="${C.grid}" opacity=".9"><title>gap between two captures (no traffic recorded)</title></rect>
+    <text x="${(X(g0)+X(g1))/2}" y="${cBot-6}" text-anchor="middle" font-size="10" fill="${C.muted}">capture gap</text>`;
+  // lanes
+  let y = top;
+  for (const ln of lanes){
+    const mid = y + ln.h/2;
+    s += `<line x1="${L.left}" x2="${L.left+pw}" y1="${y+ln.h}" y2="${y+ln.h}" stroke="${C.rule}"/>`;
+    s += `<text x="${L.left-10}" y="${mid+4}" text-anchor="end" font-size="12" fill="${C.ink2}">${ln.label}</text>`;
+    if (ln.key==='radio'){
+      for (const t of e.uplinks) s += `<line x1="${X(t)}" x2="${X(t)}" y1="${mid-9}" y2="${mid+9}" stroke="${C.blue}" stroke-width="1.6"><title>uplink t=${fmt(t-e.t0)} s</title></line>`;
+      for (const t of e.forged) s += `<path d="M${X(t)} ${mid-11} l5 9 h-10 z" fill="${C.orange}" stroke="${C.panel}" stroke-width="1"><title>FORGED frame t=${fmt(t-e.t0)} s</title></path>`;
+    }
+    if (ln.key==='rep'){
+      for (const r of e.reports){
+        if (!(r.mine || r.status!=='unchanged')) continue;
+        const cx = X(r.t), tt = `${r.status} report, ${r.len} B, t=${fmt(r.t-e.t0)} s`;
+        if (r.status==='unchanged') s += `<circle cx="${cx}" cy="${mid}" r="3.6" fill="${C.blue}" stroke="${C.panel}" stroke-width="1"><title>${tt}</title></circle>`;
+        else if (r.status==='removed') s += `<circle cx="${cx}" cy="${mid}" r="4" fill="none" stroke="${C.mag}" stroke-width="1.6"><title>HIDDEN by the hub: ${tt}</title></circle>`;
+        else s += `<rect x="${cx-3.8}" y="${mid-3.8}" width="7.6" height="7.6" fill="${C.orange}" stroke="${C.panel}" stroke-width="1"><title>${tt}</title></rect>`;
+      }
+    }
+    if (ln.key==='eg'){
+      for (const g of e.egress){
+        if (g.injected) s += `<rect x="${X(g.t)-3.5}" y="${mid-3.5}" width="7" height="7" fill="${C.orange}" stroke="${C.panel}" stroke-width="1"><title>LEAKED by the hub to ${esc(g.host)}, t=${fmt(g.t-e.t0)} s</title></rect>`;
+        else if (g.new) s += `<circle cx="${X(g.t)}" cy="${mid}" r="3" fill="none" stroke="${C.grey}" stroke-width="1.4"><title>benign traffic to a host not seen at commissioning: ${esc(g.host)}</title></circle>`;
+        else s += `<circle cx="${X(g.t)}" cy="${mid}" r="2.6" fill="${C.grey}"><title>to known host ${esc(g.host)}</title></circle>`;
+      }
+    }
+    y += ln.h;
+  }
+  // statistic panel
+  s += `<text x="${L.left-10}" y="${cTop+cH/2}" text-anchor="end" font-size="12" fill="${C.ink2}">${tr?esc(tr.tid):'no test'}</text>`;
+  s += `<text x="${L.left-10}" y="${cTop+cH/2+15}" text-anchor="end" font-size="11" fill="${C.muted}">${tr?(tr.attacked.kind==='cusum'?'statistic':'count'):''}</text>`;
+  if (tr){
+    const A = tr.attacked, Cl = tr.clean;
+    const ymax = Math.max(A.h*1.25, ...A.S, ...Cl.S, 1);
+    const Y = v => cBot - v/ymax*(cH-8);
+    for (const g of niceTicks(0, ymax, 4)){ s += `<line x1="${L.left}" x2="${L.left+pw}" y1="${Y(g)}" y2="${Y(g)}" stroke="${C.grid}"/>
+      <text x="${L.left-4}" y="${Y(g)+4}" text-anchor="end" font-size="10" fill="${C.muted}">${+g.toFixed(2)}</text>`; }
+    s += `<line x1="${L.left}" x2="${L.left+pw}" y1="${Y(A.h)}" y2="${Y(A.h)}" stroke="${C.thr}" stroke-width="1.2" stroke-dasharray="5 4"/>`;
+    s += `<text x="${L.left+4}" y="${Y(A.h)-5}" font-size="11" fill="${C.ink}">${A.kind==='cusum' ? 'threshold h = '+fmt(A.h,2) : 'alarm above '+fmt(A.h-0.5,0)+' records'}</text>`;
+    s += stepPath(Cl, X, Y, e.lo, C.grey, '5 3', 1.4);
+    s += stepPath(A, X, Y, e.lo, C.blue, '', 2.2);
+    // the first alarm inside the scoring window decides the episode; later ones are only marked
+    const first = A.alarms.find(a => a >= e.t0 && a <= e.t1 + e.tail);
+    for (const a of A.alarms){
+      if (a === first) continue;
+      s += `<circle cx="${X(a)}" cy="${Y(A.h)}" r="2.6" fill="${C.muted}"><title>later alarm at t=${fmt(a-e.t0)} s (the statistic restarts at 0 after each alarm)</title></circle>`;
+    }
+    if (first != null){
+      s += `<line x1="${X(first)}" x2="${X(first)}" y1="${top}" y2="${cBot}" stroke="${C.mag}" stroke-width="1.8"/>`;
+      s += `<circle cx="${X(first)}" cy="${Y(A.h)}" r="5.5" fill="${C.mag}" stroke="${C.panel}" stroke-width="2"><title>first alarm at t=${fmt(first-e.t0)} s</title></circle>`;
+      const right = X(first) < L.left + pw*0.78;
+      s += `<text x="${X(first)+(right?8:-8)}" y="${cTop+30}" text-anchor="${right?'start':'end'}" font-size="12" font-weight="650" fill="${C.mag}">ALARM +${fmt(first-e.t0)} s</text>`;
+    }
+    for (const a of Cl.alarms) s += `<circle cx="${X(a)}" cy="${Y(Cl.h)}" r="3.5" fill="none" stroke="${C.grey}" stroke-width="1.5"><title>clean-traffic alarm t=${fmt(a-e.t0)} s</title></circle>`;
+  } else {
+    s += `<text x="${L.left+pw/2}" y="${cTop+cH/2}" text-anchor="middle" font-size="13" fill="${C.ink2}">${esc(e.missing.join(', '))} was not admitted at commissioning in this fold</text>`;
+  }
+  s += `<line x1="${L.left}" x2="${L.left+pw}" y1="${cBot}" y2="${cBot}" stroke="${C.rule}"/>`;
+  for (const g of niceTicks(x0, x1, 8)) s += `<line x1="${X(g+e.t0)}" x2="${X(g+e.t0)}" y1="${cBot}" y2="${cBot+4}" stroke="${C.muted}"/>
+    <text x="${X(g+e.t0)}" y="${cBot+16}" text-anchor="middle" font-size="11" fill="${C.ink2}">${+g.toFixed(0)}</text>`;
+  s += `<text x="${L.left+pw/2}" y="${cBot+31}" text-anchor="middle" font-size="11" fill="${C.ink2}">seconds from attack start</text>`;
+  s += `<line id="xh" x1="0" x2="0" y1="${top}" y2="${cBot}" stroke="${C.ink2}" stroke-width="1" opacity="0"/>`;
+  s += `<rect id="hit" x="${L.left}" y="${top}" width="${pw}" height="${cBot-top}" fill="transparent"/></svg>`;
+  host.innerHTML = `<div id="readout"></div>` + s;
+  legend(tr, e);
+  // crosshair + readout
+  const svg = host.querySelector('svg'), xh = svg.querySelector('#xh'), ro = $('readout');
+  svg.querySelector('#hit').addEventListener('mousemove', ev => {
+    const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * W / r.width;
+    const t = e.t0 + x0 + (sx - L.left) / pw * (x1 - x0);
+    xh.setAttribute('x1', sx); xh.setAttribute('x2', sx); xh.setAttribute('opacity', .5);
+    let html = `<b>t = ${fmt(t-e.t0)} s</b>`;
+    if (tr){ html += `<br><span style="color:${C.blue}">attacked</span>: ${fmt(valueAt(tr.attacked,t),2)}`;
+             html += `<br><span style="color:${C.grey}">clean</span>: ${fmt(valueAt(tr.clean,t),2)}`; }
+    const nu = e.uplinks.filter(u=>Math.abs(u-t) < (x1-x0)/pw*4).length;
+    if (nu) html += `<br>${nu} uplink${nu>1?'s':''} here`;
+    ro.innerHTML = html; ro.style.display = 'block';
+    const px = (ev.clientX - r.left); ro.style.left = Math.min(px + 14, r.width - 190) + 'px'; ro.style.top = '8px';
+  });
+  svg.querySelector('#hit').addEventListener('mouseleave', () => { xh.setAttribute('opacity', 0); ro.style.display = 'none'; });
+}
+function valueAt(T, t){ let v = 0; for (let i=0;i<T.t.length && T.t[i]<=t;i++) v = T.S[i]; return v; }
+function stepPath(T, X, Y, lo, color, dash, w){
+  if (!T.t.length) return '';
+  let d = `M${X(lo)} ${Y(0)}`, prev = 0;
+  for (let i=0;i<T.t.length;i++){ d += ` H${X(T.t[i])} V${Y(T.S[i])}`; prev = T.S[i]; }
+  return `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" ${dash?`stroke-dasharray="${dash}"`:''} stroke-linejoin="round"/>`;
+}
+function niceTicks(a, b, n){
+  const span = b - a, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0))), err = step0 / mag;
+  const step = (err >= 7.5 ? 10 : err >= 3 ? 5 : err >= 1.5 ? 2 : 1) * mag;
+  const out = []; for (let v = Math.ceil(a/step)*step; v <= b + 1e-9; v += step) out.push(v); return out;
+}
+function legend(tr, e){
+  const C = k => css(k);
+  const items = [[`<span class="sw" style="background:${C('--blue')};width:3px;height:12px"></span>`, 'device uplink (radio)'],
+    [`<span class="sw" style="background:${C('--blue')};border-radius:50%;width:9px;height:9px"></span>`, 'hub report, unchanged'],
+    [`<span class="sw" style="border:1.6px solid ${C('--magenta')};border-radius:50%;width:10px;height:10px;background:none"></span>`, 'report hidden by the hub'],
+    [`<span class="sw" style="background:${C('--orange')};width:9px;height:9px"></span>`, 'altered / delayed / invented / leaked by the hub'],
+    [`<span class="sw" style="background:${C('--orange')};clip-path:polygon(50% 0,100% 100%,0 100%);width:11px;height:10px"></span>`, 'forged radio frame']];
+  if (e && e.attack==='leak') items.push([`<span class="sw" style="border:1.4px solid ${C('--grey')};border-radius:50%;width:9px;height:9px;background:none"></span>`, 'benign traffic to a host unseen at commissioning']);
+  if (tr) items.push([`<span class="sw" style="background:${C('--blue')};height:3px"></span>`, 'statistic, attacked traffic'],
+                     [`<span class="sw" style="border-top:2px dashed ${C('--grey')};height:0;background:none"></span>`, 'same test, clean traffic'],
+                     [`<span class="sw" style="background:${C('--magenta')};width:2px;height:12px"></span>`, 'first alarm (decides the episode)'],
+                     [`<span class="sw" style="background:${C('--muted')};border-radius:50%;width:6px;height:6px"></span>`, 'later alarm']);
+  $('legend').innerHTML = items.map(([a,b])=>`<span>${a}${b}</span>`).join('');
+}
+window.addEventListener('resize', () => { if (EP) draw(); });
+
+// ───────────────────────── paper vs code
+async function loadCheck(){
+  $('checksum').innerHTML = 'checking …';
+  const r = await api('/api/check');
+  $('checksum').innerHTML = `<span class="big">${r.agree}/${r.n}</span> rows of the paper agree with the code's output`;
+  $('checktab').innerHTML = '<tr><th>Where in the paper</th><th>Printed in the paper</th><th>Recomputed from the result files</th><th>Match</th></tr>' +
+    r.rows.map(x=>`<tr><td>${esc(x.where)}</td><td class="mono">${esc(x.paper)}</td><td class="mono">${esc(x.code)}</td>
+      <td><span class="pill ${x.ok?'ok':'bad'}">${x.ok?'yes':'NO'}</span></td></tr>`).join('');
+}
+init().catch(e => { $('status').innerHTML = `<span class="err">${esc(e.message)}</span>`; });
+</script>
+</body>
+</html>
